@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Advanced Tic Tac Toe</title>
+<title>Ultimate Tic Tac Toe</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-* { margin:0; padding:0; box-sizing:border-box; font-family:sans-serif; }
-
-body {
+*{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
+body{
   background:#000;
   display:flex;
   justify-content:center;
@@ -18,7 +17,7 @@ body {
 }
 
 /* GLASS */
-.glass {
+.glass{
   background:rgba(255,255,255,0.05);
   backdrop-filter:blur(20px);
   padding:30px;
@@ -28,7 +27,7 @@ body {
 }
 
 /* BUTTON */
-button {
+button{
   margin-top:15px;
   padding:12px 20px;
   border:none;
@@ -36,42 +35,39 @@ button {
   background:linear-gradient(135deg,#00c6ff,#8e2de2);
   color:white;
   cursor:pointer;
-  transition:0.3s;
+  transition:0.25s;
 }
-button:hover { transform:scale(1.1); }
+button:hover{transform:scale(1.08)}
 
-.hidden { display:none; }
+.hidden{display:none}
 
-canvas {
+/* CANVAS */
+canvas{
   border-radius:15px;
   background:rgba(255,255,255,0.03);
 }
 
 /* RESULT */
-#resultOverlay {
+#resultOverlay{
   position:absolute;
   inset:0;
-  background:rgba(0,0,0,0.9);
+  background:rgba(0,0,0,0.92);
   display:flex;
   flex-direction:column;
   justify-content:center;
   align-items:center;
-  animation:fadeIn 0.4s;
+  animation:fadeIn 0.3s;
 }
-@keyframes fadeIn {
-  from{opacity:0} to{opacity:1}
-}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
-/* TOSS ANIMATION */
-.coin {
-  width:60px;
-  height:60px;
-  border-radius:50%;
+/* COIN */
+.coin{
+  width:60px;height:60px;border-radius:50%;
   background:linear-gradient(45deg,#00f0ff,#ff00ff);
   margin:20px auto;
-  animation:flip 0.8s infinite;
+  animation:flip 0.8s infinite linear;
 }
-@keyframes flip {
+@keyframes flip{
   0%{transform:rotateY(0)}
   100%{transform:rotateY(360deg)}
 }
@@ -82,7 +78,7 @@ canvas {
 
 <div id="startScreen" class="glass">
   <h1>Tic Tac Toe</h1>
-  <button onclick="startGame('AI')">1 vs AI</button>
+  <button onclick="startGame('AI')">1 vs AI (Brutal)</button>
   <button onclick="startGame('LOCAL')">2 Player</button>
 </div>
 
@@ -105,51 +101,59 @@ canvas {
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-let board, currentPlayer, gameMode, gameActive, winningCombo = null;
+let state;
 
-/* CANVAS DPI FIX */
-function resizeCanvas(){
-  const size = 300;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
-  canvas.style.width = size + "px";
-  canvas.style.height = size + "px";
+/* ---------- STATE ENGINE ---------- */
+function createState(){
+  return {
+    board:Array(9).fill(""),
+    currentPlayer:null,
+    mode:null,
+    active:false,
+    lock:false,
+    winner:null,
+    combo:null,
+    aiTimer:null
+  };
+}
+
+/* ---------- INIT ---------- */
+function initCanvas(){
+  const size=300, dpr=window.devicePixelRatio||1;
+  canvas.width=size*dpr;
+  canvas.height=size*dpr;
+  canvas.style.width=size+"px";
+  canvas.style.height=size+"px";
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
-resizeCanvas();
 
-/* START */
+/* ---------- START ---------- */
 function startGame(mode){
-  gameMode = mode;
-  document.getElementById("startScreen").classList.add("hidden");
-  document.getElementById("tossScreen").classList.remove("hidden");
+  state=createState();
+  state.mode=mode;
+
+  show("tossScreen");
+  hide("startScreen");
 
   setTimeout(()=>{
-    currentPlayer = Math.random()<0.5 ? "X":"O";
-    document.getElementById("tossText").innerText = currentPlayer+" starts";
-  },1000);
+    state.currentPlayer=Math.random()<0.5?"X":"O";
+    document.getElementById("tossText").innerText=state.currentPlayer+" starts";
+  },800);
 
   setTimeout(()=>{
-    document.getElementById("tossScreen").classList.add("hidden");
-    document.getElementById("gameScreen").classList.remove("hidden");
-    initGame();
-  },2000);
+    hide("tossScreen");
+    show("gameScreen");
+
+    state.active=true;
+    draw();
+
+    if(state.mode==="AI" && state.currentPlayer==="O"){
+      triggerAI();
+    }
+  },1800);
 }
 
-/* INIT */
-function initGame(){
-  board = Array(9).fill("");
-  gameActive = true;
-  winningCombo = null;
-  draw();
-
-  if(gameMode==="AI" && currentPlayer==="O"){
-    setTimeout(aiMove,300);
-  }
-}
-
-/* DRAW */
+/* ---------- DRAW ---------- */
 function draw(){
   ctx.clearRect(0,0,300,300);
 
@@ -158,39 +162,30 @@ function draw(){
 
   for(let i=1;i<3;i++){
     ctx.beginPath();
-    ctx.moveTo(i*100,0);
-    ctx.lineTo(i*100,300);
-    ctx.stroke();
-
+    ctx.moveTo(i*100,0); ctx.lineTo(i*100,300); ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(0,i*100);
-    ctx.lineTo(300,i*100);
-    ctx.stroke();
+    ctx.moveTo(0,i*100); ctx.lineTo(300,i*100); ctx.stroke();
   }
 
-  board.forEach((cell,i)=>{
-    if(cell) drawSymbol(i,cell);
+  state.board.forEach((c,i)=>{
+    if(c) drawSymbol(i,c);
   });
 
-  if(winningCombo){
-    drawWinLine();
-  }
+  if(state.combo) drawWin();
 }
 
-/* SYMBOL */
+/* ---------- SYMBOL ---------- */
 function drawSymbol(i,p){
   const x=(i%3)*100+50;
   const y=Math.floor(i/3)*100+50;
 
-  ctx.strokeStyle = p==="X" ? "#0ff":"#f0f";
+  ctx.strokeStyle=p==="X"?"#0ff":"#f0f";
   ctx.lineWidth=5;
 
   if(p==="X"){
     ctx.beginPath();
-    ctx.moveTo(x-25,y-25);
-    ctx.lineTo(x+25,y+25);
-    ctx.moveTo(x+25,y-25);
-    ctx.lineTo(x-25,y+25);
+    ctx.moveTo(x-25,y-25); ctx.lineTo(x+25,y+25);
+    ctx.moveTo(x+25,y-25); ctx.lineTo(x-25,y+25);
     ctx.stroke();
   }else{
     ctx.beginPath();
@@ -199,13 +194,12 @@ function drawSymbol(i,p){
   }
 }
 
-/* WIN LINE */
-function drawWinLine(){
-  const [a,b,c]=winningCombo;
-  const getXY=i=>[(i%3)*100+50,Math.floor(i/3)*100+50];
-
-  const [x1,y1]=getXY(a);
-  const [x2,y2]=getXY(c);
+/* ---------- WIN LINE ---------- */
+function drawWin(){
+  const [a,,c]=state.combo;
+  const pos=i=>[(i%3)*100+50,Math.floor(i/3)*100+50];
+  const [x1,y1]=pos(a);
+  const [x2,y2]=pos(c);
 
   ctx.strokeStyle="yellow";
   ctx.lineWidth=6;
@@ -215,75 +209,70 @@ function drawWinLine(){
   ctx.stroke();
 }
 
-/* CLICK */
+/* ---------- CLICK ---------- */
 canvas.addEventListener("click",e=>{
-  if(!gameActive) return;
+  if(!state.active || state.lock) return;
 
   const rect=canvas.getBoundingClientRect();
   const x=Math.floor((e.clientX-rect.left)/100);
   const y=Math.floor((e.clientY-rect.top)/100);
   const i=y*3+x;
 
-  if(board[i]) return;
+  if(state.board[i]) return;
 
-  makeMove(i,currentPlayer);
-
-  if(gameMode==="AI" && gameActive && currentPlayer==="O"){
-    setTimeout(aiMove,300);
-  }
+  play(i,state.currentPlayer);
 });
 
-/* MOVE */
-function makeMove(i,p){
-  board[i]=p;
+/* ---------- PLAY ---------- */
+function play(i,p){
+  state.board[i]=p;
 
   if(checkWin(p)){
-    gameActive=false;
+    state.active=false;
     draw();
-    setTimeout(()=>endGame(p+" Wins"),400);
-    return;
+    return endGame(p+" Wins");
   }
 
-  if(!board.includes("")){
-    gameActive=false;
-    endGame("Draw");
-    return;
+  if(!state.board.includes("")){
+    state.active=false;
+    return endGame("Draw");
   }
 
-  currentPlayer = p==="X" ? "O":"X";
+  state.currentPlayer = p==="X"?"O":"X";
   draw();
+
+  if(state.mode==="AI" && state.currentPlayer==="O"){
+    triggerAI();
+  }
 }
 
-/* WIN */
-function checkWin(p){
-  const wins=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  for(let w of wins){
-    if(w.every(i=>board[i]===p)){
-      winningCombo=w;
-      return true;
-    }
-  }
-  return false;
-}
+/* ---------- AI ---------- */
+function triggerAI(){
+  state.lock=true;
 
-/* AI */
-function aiMove(){
-  let best=-Infinity, move;
+  state.aiTimer=setTimeout(()=>{
+    if(!state.active) return;
 
-  for(let i=0;i<9;i++){
-    if(!board[i]){
-      board[i]="O";
-      let score=minimax(board,0,false);
-      board[i]="";
-      if(score>best){best=score; move=i;}
+    let best=-Infinity, move;
+
+    for(let i=0;i<9;i++){
+      if(!state.board[i]){
+        state.board[i]="O";
+        let score=minimax(state.board,0,false);
+        state.board[i]="";
+        if(score>best){best=score;move=i;}
+      }
     }
-  }
-  makeMove(move,"O");
+
+    state.lock=false;
+    play(move,"O");
+
+  },250);
 }
 
 function minimax(b,d,isMax){
-  if(checkStaticWin(b,"O")) return 10-d;
-  if(checkStaticWin(b,"X")) return d-10;
+  if(winStatic(b,"O")) return 10-d;
+  if(winStatic(b,"X")) return d-10;
   if(!b.includes("")) return 0;
 
   if(isMax){
@@ -296,7 +285,7 @@ function minimax(b,d,isMax){
       }
     }
     return best;
-  } else {
+  }else{
     let best=Infinity;
     for(let i=0;i<9;i++){
       if(!b[i]){
@@ -309,23 +298,45 @@ function minimax(b,d,isMax){
   }
 }
 
-function checkStaticWin(b,p){
-  const wins=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  return wins.some(w=>w.every(i=>b[i]===p));
+/* ---------- WIN ---------- */
+function checkWin(p){
+  const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for(let c of w){
+    if(c.every(i=>state.board[i]===p)){
+      state.combo=c;
+      return true;
+    }
+  }
+  return false;
 }
 
-/* END */
+function winStatic(b,p){
+  const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  return w.some(c=>c.every(i=>b[i]===p));
+}
+
+/* ---------- END ---------- */
 function endGame(text){
   document.getElementById("resultText").innerText=text;
-  document.getElementById("resultOverlay").classList.remove("hidden");
+  show("resultOverlay");
 }
 
-/* RESET */
+/* ---------- RESET ---------- */
 function resetGame(){
-  document.getElementById("resultOverlay").classList.add("hidden");
-  document.getElementById("gameScreen").classList.add("hidden");
-  document.getElementById("startScreen").classList.remove("hidden");
+  if(state.aiTimer) clearTimeout(state.aiTimer);
+  state=null;
+
+  hide("resultOverlay");
+  hide("gameScreen");
+  hide("tossScreen");
+  show("startScreen");
 }
+
+/* ---------- UI ---------- */
+function show(id){document.getElementById(id).classList.remove("hidden")}
+function hide(id){document.getElementById(id).classList.add("hidden")}
+
+initCanvas();
 </script>
 
 </body>
