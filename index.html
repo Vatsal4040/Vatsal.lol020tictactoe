@@ -2,341 +2,339 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Ultimate Tic Tac Toe</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tic Tac Toe</title>
 
 <style>
-*{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
+*{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif;}
 body{
   background:#000;
+  color:#fff;
+  height:100vh;
   display:flex;
   justify-content:center;
   align-items:center;
-  height:100vh;
-  color:white;
+  overflow:hidden;
 }
 
-/* GLASS */
-.glass{
-  background:rgba(255,255,255,0.05);
-  backdrop-filter:blur(20px);
-  padding:30px;
-  border-radius:20px;
-  text-align:center;
-  box-shadow:0 0 40px rgba(0,255,255,0.2);
+/* BACKGROUND PIXELS */
+#bgCanvas{
+  position:fixed;
+  inset:0;
+  z-index:-1;
 }
 
-/* BUTTON */
+/* SCREENS */
+.screen{display:none;text-align:center;}
+.screen.active{display:block;}
+
 button{
-  margin-top:15px;
-  padding:12px 20px;
+  padding:12px 25px;
+  margin:10px;
   border:none;
-  border-radius:12px;
-  background:linear-gradient(135deg,#00c6ff,#8e2de2);
-  color:white;
+  border-radius:8px;
+  background:#00ffe7;
+  font-weight:bold;
   cursor:pointer;
-  transition:0.25s;
 }
-button:hover{transform:scale(1.08)}
 
-.hidden{display:none}
-
-/* CANVAS */
-canvas{
-  border-radius:15px;
-  background:rgba(255,255,255,0.03);
+/* GAME */
+.top{
+  display:flex;
+  justify-content:space-between;
+  width:90vw;
+  max-width:400px;
+  margin:auto;
 }
+.top img{
+  width:50px;height:50px;border-radius:50%;
+}
+
+/* BOARD */
+.board{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  width:90vw;
+  max-width:400px;
+  margin:20px auto;
+}
+.cell{
+  aspect-ratio:1;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  font-size:3rem;
+  background:#111;
+  border-radius:10px;
+  cursor:pointer;
+}
+.neonX{color:#00eaff;text-shadow:0 0 15px #00eaff;}
+.neonO{color:#ff2d75;text-shadow:0 0 15px #ff2d75;}
 
 /* RESULT */
 #resultOverlay{
-  position:absolute;
+  position:fixed;
   inset:0;
-  background:rgba(0,0,0,0.92);
-  display:flex;
-  flex-direction:column;
+  background:rgba(0,0,0,0.9);
+  display:none;
   justify-content:center;
   align-items:center;
-  animation:fadeIn 0.3s;
 }
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.resultBox{
+  background:#111;
+  padding:30px;
+  border-radius:15px;
+}
 
-/* COIN */
-.coin{
-  width:60px;height:60px;border-radius:50%;
-  background:linear-gradient(45deg,#00f0ff,#ff00ff);
-  margin:20px auto;
-  animation:flip 0.8s infinite linear;
-}
-@keyframes flip{
-  0%{transform:rotateY(0)}
-  100%{transform:rotateY(360deg)}
+@media(max-width:500px){
+  .cell{font-size:2rem;}
 }
 </style>
 </head>
 
 <body>
 
-<div id="startScreen" class="glass">
-  <h1>Tic Tac Toe</h1>
-  <button onclick="startGame('AI')">1 vs AI (Brutal)</button>
-  <button onclick="startGame('LOCAL')">2 Player</button>
+<canvas id="bgCanvas"></canvas>
+
+<!-- START -->
+<div id="startScreen" class="screen active">
+  <h1>Choose Your Symbol</h1>
+  <button onclick="startGame('X')">Play as X</button>
+  <button onclick="startGame('O')">Play as O</button>
 </div>
 
-<div id="tossScreen" class="glass hidden">
-  <h2>Flipping Coin...</h2>
-  <div class="coin"></div>
-  <p id="tossText"></p>
+<!-- GAME -->
+<div id="gameScreen" class="screen">
+  <div class="top">
+    <div><img id="playerAvatar"><p>You</p></div>
+    <div><img id="aiAvatar"><p>AI 🤖</p></div>
+  </div>
+
+  <div id="board" class="board"></div>
+  <h2 id="status"></h2>
+
+  <button onclick="restart()">Restart</button>
 </div>
 
-<div id="gameScreen" class="hidden">
-  <canvas id="canvas"></canvas>
-</div>
-
-<div id="resultOverlay" class="hidden">
-  <h1 id="resultText"></h1>
-  <button onclick="resetGame()">Play Again</button>
+<!-- RESULT -->
+<div id="resultOverlay">
+  <div class="resultBox">
+    <h1 id="resultText"></h1>
+    <button onclick="playAgain()">Play Again</button>
+  </div>
 </div>
 
 <script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+// AVATARS
+const avatars=[
+"https://i.pravatar.cc/150?img=1",
+"https://i.pravatar.cc/150?img=2",
+"https://i.pravatar.cc/150?img=3",
+"https://i.pravatar.cc/150?img=15",
+"https://i.pravatar.cc/150?img=20",
+"https://i.pravatar.cc/150?img=30"
+];
 
-let state;
+let player, ai, turn, boardArr;
 
-/* ---------- STATE ENGINE ---------- */
-function createState(){
-  return {
-    board:Array(9).fill(""),
-    currentPlayer:null,
-    mode:null,
-    active:false,
-    lock:false,
-    winner:null,
-    combo:null,
-    aiTimer:null
-  };
+// START GAME
+function startGame(symbol){
+  player=symbol;
+  ai=symbol==="X"?"O":"X";
+  turn="X";
+
+  document.getElementById("startScreen").classList.remove("active");
+  document.getElementById("gameScreen").classList.add("active");
+
+  // avatars
+  let pAvatar=avatars[Math.floor(Math.random()*avatars.length)];
+  let aAvatar;
+  do{
+    aAvatar=avatars[Math.floor(Math.random()*avatars.length)];
+  }while(aAvatar===pAvatar);
+
+  document.getElementById("playerAvatar").src=pAvatar;
+  document.getElementById("aiAvatar").src=aAvatar;
+
+  initBoard();
+
+  if(ai==="X") aiMove();
 }
 
-/* ---------- INIT ---------- */
-function initCanvas(){
-  const size=300, dpr=window.devicePixelRatio||1;
-  canvas.width=size*dpr;
-  canvas.height=size*dpr;
-  canvas.style.width=size+"px";
-  canvas.style.height=size+"px";
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-}
+// BOARD INIT
+function initBoard(){
+  boardArr=["","","","","","","","",""];
+  const board=document.getElementById("board");
+  board.innerHTML="";
 
-/* ---------- START ---------- */
-function startGame(mode){
-  state=createState();
-  state.mode=mode;
-
-  show("tossScreen");
-  hide("startScreen");
-
-  setTimeout(()=>{
-    state.currentPlayer=Math.random()<0.5?"X":"O";
-    document.getElementById("tossText").innerText=state.currentPlayer+" starts";
-  },800);
-
-  setTimeout(()=>{
-    hide("tossScreen");
-    show("gameScreen");
-
-    state.active=true;
-    draw();
-
-    if(state.mode==="AI" && state.currentPlayer==="O"){
-      triggerAI();
-    }
-  },1800);
-}
-
-/* ---------- DRAW ---------- */
-function draw(){
-  ctx.clearRect(0,0,300,300);
-
-  ctx.strokeStyle="#0ff";
-  ctx.lineWidth=4;
-
-  for(let i=1;i<3;i++){
-    ctx.beginPath();
-    ctx.moveTo(i*100,0); ctx.lineTo(i*100,300); ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0,i*100); ctx.lineTo(300,i*100); ctx.stroke();
-  }
-
-  state.board.forEach((c,i)=>{
-    if(c) drawSymbol(i,c);
+  boardArr.forEach((_,i)=>{
+    let cell=document.createElement("div");
+    cell.className="cell";
+    cell.onclick=()=>move(i);
+    board.appendChild(cell);
   });
 
-  if(state.combo) drawWin();
+  updateStatus();
 }
 
-/* ---------- SYMBOL ---------- */
-function drawSymbol(i,p){
-  const x=(i%3)*100+50;
-  const y=Math.floor(i/3)*100+50;
+// MOVE
+function move(i){
+  if(boardArr[i]!=="" || turn!==player) return;
 
-  ctx.strokeStyle=p==="X"?"#0ff":"#f0f";
-  ctx.lineWidth=5;
+  boardArr[i]=player;
+  turn=ai;
+  render();
 
-  if(p==="X"){
-    ctx.beginPath();
-    ctx.moveTo(x-25,y-25); ctx.lineTo(x+25,y+25);
-    ctx.moveTo(x+25,y-25); ctx.lineTo(x-25,y+25);
-    ctx.stroke();
-  }else{
-    ctx.beginPath();
-    ctx.arc(x,y,25,0,Math.PI*2);
-    ctx.stroke();
-  }
+  if(checkEnd()) return;
+
+  setTimeout(aiMove,300);
 }
 
-/* ---------- WIN LINE ---------- */
-function drawWin(){
-  const [a,,c]=state.combo;
-  const pos=i=>[(i%3)*100+50,Math.floor(i/3)*100+50];
-  const [x1,y1]=pos(a);
-  const [x2,y2]=pos(c);
+// AI MOVE (MINIMAX)
+function aiMove(){
+  let bestScore=-Infinity;
+  let moveIndex;
 
-  ctx.strokeStyle="yellow";
-  ctx.lineWidth=6;
-  ctx.beginPath();
-  ctx.moveTo(x1,y1);
-  ctx.lineTo(x2,y2);
-  ctx.stroke();
-}
-
-/* ---------- CLICK ---------- */
-canvas.addEventListener("click",e=>{
-  if(!state.active || state.lock) return;
-
-  const rect=canvas.getBoundingClientRect();
-  const x=Math.floor((e.clientX-rect.left)/100);
-  const y=Math.floor((e.clientY-rect.top)/100);
-  const i=y*3+x;
-
-  if(state.board[i]) return;
-
-  play(i,state.currentPlayer);
-});
-
-/* ---------- PLAY ---------- */
-function play(i,p){
-  state.board[i]=p;
-
-  if(checkWin(p)){
-    state.active=false;
-    draw();
-    return endGame(p+" Wins");
-  }
-
-  if(!state.board.includes("")){
-    state.active=false;
-    return endGame("Draw");
-  }
-
-  state.currentPlayer = p==="X"?"O":"X";
-  draw();
-
-  if(state.mode==="AI" && state.currentPlayer==="O"){
-    triggerAI();
-  }
-}
-
-/* ---------- AI ---------- */
-function triggerAI(){
-  state.lock=true;
-
-  state.aiTimer=setTimeout(()=>{
-    if(!state.active) return;
-
-    let best=-Infinity, move;
-
-    for(let i=0;i<9;i++){
-      if(!state.board[i]){
-        state.board[i]="O";
-        let score=minimax(state.board,0,false);
-        state.board[i]="";
-        if(score>best){best=score;move=i;}
+  for(let i=0;i<9;i++){
+    if(boardArr[i]===""){
+      boardArr[i]=ai;
+      let score=minimax(boardArr,0,false);
+      boardArr[i]="";
+      if(score>bestScore){
+        bestScore=score;
+        moveIndex=i;
       }
     }
+  }
 
-    state.lock=false;
-    play(move,"O");
-
-  },250);
+  boardArr[moveIndex]=ai;
+  turn=player;
+  render();
+  checkEnd();
 }
 
-function minimax(b,d,isMax){
-  if(winStatic(b,"O")) return 10-d;
-  if(winStatic(b,"X")) return d-10;
-  if(!b.includes("")) return 0;
+// MINIMAX
+function minimax(board, depth, isMax){
+  let result=checkWinner(board);
+  if(result!==null){
+    if(result===ai) return 10-depth;
+    if(result===player) return depth-10;
+    return 0;
+  }
 
   if(isMax){
     let best=-Infinity;
     for(let i=0;i<9;i++){
-      if(!b[i]){
-        b[i]="O";
-        best=Math.max(best,minimax(b,d+1,false));
-        b[i]="";
+      if(board[i]===""){
+        board[i]=ai;
+        best=Math.max(best,minimax(board,depth+1,false));
+        board[i]="";
       }
     }
     return best;
   }else{
     let best=Infinity;
     for(let i=0;i<9;i++){
-      if(!b[i]){
-        b[i]="X";
-        best=Math.min(best,minimax(b,d+1,true));
-        b[i]="";
+      if(board[i]===""){
+        board[i]=player;
+        best=Math.min(best,minimax(board,depth+1,true));
+        board[i]="";
       }
     }
     return best;
   }
 }
 
-/* ---------- WIN ---------- */
-function checkWin(p){
-  const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  for(let c of w){
-    if(c.every(i=>state.board[i]===p)){
-      state.combo=c;
-      return true;
+// CHECK
+function checkWinner(b){
+  const wins=[
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+
+  for(let w of wins){
+    if(b[w[0]] && b[w[0]]===b[w[1]] && b[w[1]]===b[w[2]]){
+      return b[w[0]];
     }
   }
-  return false;
+
+  if(b.every(x=>x!=="")) return "draw";
+  return null;
 }
 
-function winStatic(b,p){
-  const w=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  return w.some(c=>c.every(i=>b[i]===p));
-}
+function checkEnd(){
+  let res=checkWinner(boardArr);
+  if(res===null) return false;
 
-/* ---------- END ---------- */
-function endGame(text){
+  let text = res==="draw" ? "Draw 🤝" :
+             res===player ? "You Win 🎉" : "AI Wins 🤖";
+
   document.getElementById("resultText").innerText=text;
-  show("resultOverlay");
+  document.getElementById("resultOverlay").style.display="flex";
+  return true;
 }
 
-/* ---------- RESET ---------- */
-function resetGame(){
-  if(state.aiTimer) clearTimeout(state.aiTimer);
-  state=null;
-
-  hide("resultOverlay");
-  hide("gameScreen");
-  hide("tossScreen");
-  show("startScreen");
+// RENDER
+function render(){
+  document.querySelectorAll(".cell").forEach((c,i)=>{
+    c.textContent=boardArr[i];
+    c.className="cell "+(boardArr[i]==="X"?"neonX":"neonO");
+  });
+  updateStatus();
 }
 
-/* ---------- UI ---------- */
-function show(id){document.getElementById(id).classList.remove("hidden")}
-function hide(id){document.getElementById(id).classList.add("hidden")}
+function updateStatus(){
+  document.getElementById("status").innerText=
+    turn===player ? "Your Turn" : "AI Thinking...";
+}
 
-initCanvas();
+// RESET
+function restart(){
+  initBoard();
+  if(ai==="X") aiMove();
+}
+
+function playAgain(){
+  document.getElementById("resultOverlay").style.display="none";
+  document.getElementById("gameScreen").classList.remove("active");
+  document.getElementById("startScreen").classList.add("active");
+}
+
+// BACKGROUND PIXELS
+const canvas=document.getElementById("bgCanvas");
+const ctx=canvas.getContext("2d");
+
+function resize(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener("resize",resize);
+
+let particles=[];
+for(let i=0;i<120;i++){
+  particles.push({
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    size:Math.random()*3,
+    speed:Math.random()*0.5,
+    color:`hsl(${Math.random()*360},100%,50%)`
+  });
+}
+
+function animate(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  particles.forEach(p=>{
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,p.size,p.size);
+    p.y+=p.speed;
+    if(p.y>canvas.height) p.y=0;
+  });
+  requestAnimationFrame(animate);
+}
+animate();
 </script>
 
 </body>
